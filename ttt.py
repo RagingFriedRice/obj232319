@@ -145,16 +145,30 @@ def check(board, row, col, seq, player):
 
     return 0
 
-testboard = [
-            ['O', 'O', 'O'],
-            ['X', 'X', ' '],
-            [' ', ' ', ' ']
-]
+# testboard = [
+#             ['O', 'O', 'O'],
+#             ['X', 'X', ' '],
+#             [' ', ' ', ' ']
+# ]
+#
+# DrawBoard(testboard)
 
-DrawBoard(testboard)
+# load save
+def load(filename):
+    fo = open(filename, "r")
+    lines = fo.read().split('\n')
+    player, size, sequence, turn = map(int, lines[0].split(' '))
+    board = [[' ' for i in range(size)] for j in range(size)]
+    for i in range(1, len(lines) - 1):
+        slots = lines[i].split(' ')
+        for j in range(len(slots)):
+            board[i - 1][j] = slots[j]
+    return board, player, size, sequence, turn
 
-if check(testboard, 0, 2, 3, 0):
-    print 'O won'
+
+testb, testp, tests, testseq, testt = load("test_save.txt")
+DrawBoard(testb)
+
 # board, pn, size, sequence, turn = start()
 
 # while 1:
