@@ -1,25 +1,23 @@
 import java.util.*;
 
-// the lsp object, this implementation using adjacency list structure.
 public class LSP {
-  public String master;
-  public int sequenceNum;
-  public int ttl;
-  public Map<String, Double> networks;
-  public String sender;
-  public String target;
+	public String router;
+	public String network;
+	public int ttl;
+	public int sequence;
+	public Map<String, Double> cost;
+	public String sender;
+	public String target;
 
-  public LSP(String master,
-             int sequenceNum,
-             int ttl,
-             Map<String, Double> networks,
-             String sender,
-             String target) {
-    this.master = master;
-    this.sequenceNum = sequenceNum;
-    this.ttl = ttl;
-    this.networks = networks;
-    this.sender = sender;
-    this.target = target;
-  }
+	public LSP(String router,
+			   String network,
+			   int ttl,
+			   int sequence,
+			   Map<String, Double> cost) {
+		this.router = router;
+		this.network = network;
+		this.ttl = ttl;
+		this.sequence = sequence;
+		this.cost = cost;
+	}
 }

@@ -2,195 +2,167 @@ import java.util.*;
 import java.lang.Double;
 
 public class Router {
+	public String routerID;
+	public String network;
+	public int sequence;
+	public int tick;
+	public Map<String, Double> networks;						// all networks in this graph
+	public Map<String, String> networkRouter;					// network, routerID outlink
+	public Map<String, Double> costRef;							// reference for cost
+	public Map<String, Double> neighborCost;					// cost of neighbor
+	public Map<String, Integer> neighborStates;					// neighbor, tick
+	public Map<String, Integer> routerStates;					// router, sequence
+	public Map<String, Map<String, Double>> adjList;			// adjecency list
+	public boolean isAlive;
+	public Map<String, String> rtn;
 
-  private static final int initTTL = 10;
-  // basic info
-  private String routerID;
-  private String network;                       // network it carries
-  public Map<String, Double> cost;              // routerID, cost(real, may change)
-  private int tickCounter;                      // how many tick
-  private int sequenceNum;                      // how many LSP sent
-  private boolean isAlive;                      // if the router is shutdown
+	public Router(String routerID,
+				  String network,
+				  Map<String, Double> costRef) {
+		this.routerID = routerID;
+		this.network = network;
+		this.sequence = 1;
+		this.tick = 0;
+		this.networks = new HashMap<String, Double>();
+		this.networks.put(this.network, 0.0);
+		this.networkRouter = new HashMap<String, String>();
+		this.networkRouter.put(routerID, network);
+		this.costRef = costRef;
+		this.neighborCost = new HashMap<String, Double>();
+		this.neighborStates = new HashMap<String, Integer>();
+		this.routerStates = new HashMap<String, Integer>();
+		this.adjList = new HashMap<String, Map<String, Double>>();
+		this.isAlive = true;
+		this.rtn = new HashMap<String, String>();
+	}
 
-  // visiter and neighbor status
-  private Map<String, Integer> visiter;         // originate router, sequenceNum
-  private Map<String, Integer> neighbor;        // routerID, tickCounter
+	public void shutdown() {
+		this.isAlive = false;
+	}
 
-  // routing table
-  private Map<String, Double> networks;         // network, cost
-  private Map<String, String> networkRouter;    // network, routerID
+	public void boot() {
+		this.isAlive = true;
+	}
 
-  public Router(String routerID,
-                String network,
-                Map<String, Double> cost,
-                Map<String, Double> networks,
-                Map<String, String> networkRouter) {
-    this.routerID = routerID;
-    this.cost = new HashMap<String, Double>(cost);
-    this.network = network;
-    this.tickCounter = 0;
-    this.sequenceNum = 1;
-    this.isAlive = true;
-    this.networks = networks;
-    this.networkRouter = networkRouter;
-    this.neighbor = new HashMap<String, Integer>();
-    this.visiter = new HashMap<String, Integer>();
-  }
+	public LSP originatePacket() {
+		if (!this.isAlive) {
+			return null;
+		}
+		updateNetworks();
+		for (String key : this.neighborCost.keySet()) {
+			System.out.println("after update " + this.routerID + " " + key + " " + this.neighborCost.get(key));
+		}
+		LSP p = new LSP(this.routerID, this.network, 10, this.sequence, this.neighborCost);
+		p.sender = this.routerID;
+		this.sequence = this.sequence + 1;
+		return p;
+	}
 
-  /**
-   * shutdown the router
-   */
-  public void shutdown() {
-    this.isAlive = false;
-  }
+	public LSP receivePacket(LSP p) {
+		p.ttl = p.ttl - 1;
+		if (!this.isAlive || p.ttl < 1 || lowerSequence(p.router, p.sequence)) {
+			return null;
+		}
+		this.adjList.put(p.router, p.cost);
+		this.routerStates.put(p.router, p.sequence);
+		String source = p.sender;
+		this.neighborStates.put(source, this.tick);
+		this.rtn.put(p.router, p.network);
+		p.sender = this.routerID;
+		return p;
+	}
 
-  /**
-   * startup the router
-   */
-  public void boot() {
-    this.isAlive = true;
-  }
+	public void printRoutingTable() {
+		System.out.println("The routing table of router " + this.routerID + ": ");
+		apsp();
+		for (String n : this.networks.keySet()) {
+			if (n.equals(this.network)) {
+				continue;
+			}
+			String nw = n;
+			int cost = this.networks.get(n).intValue();
+			String ol = this.networkRouter.get(n);
+			System.out.printf("Network: %s, Cost: %d, Outlink: %s\n", nw, cost, ol);
+		}
+		System.out.println();
+	}
 
-  /**
-   * originatePacket from this router, does nothing if the router is shutdown.
-   * @return a queue of packets which needs to be send out
-   */
-  public Queue<LSP> originatePacket() {
-    if (!this.isAlive) {
-      return null;
-    }
-    Queue<LSP> res = new LinkedList<LSP>();
-    updateNetworks();
-    // System.out.println("Originating LSP of " + this.routerID);
-    for (String key : this.cost.keySet()) {
-      LSP p = new LSP(this.routerID, this.sequenceNum, initTTL,
-                      clone(this.networks), this.routerID, key);
-      this.sequenceNum = this.sequenceNum + 1;
-      res.add(p);
-    }
-    return res;
-  }
+	// update networks after each tick
+	private void updateNetworks() {
+		this.tick = this.tick + 1;
+		for (String key : this.costRef.keySet()) {
+			System.out.println("updateing " + this.routerID + " neighbor " + key + " my tick " + this.tick);
+			System.out.println(key + " record tick " + this.neighborStates.get(key));
+			if (!this.neighborStates.containsKey(key) || this.tick - this.neighborStates.get(key) > 1) {
+				this.neighborCost.put(key, Double.POSITIVE_INFINITY);
+			} else {
+				this.neighborCost.put(key, this.costRef.get(key));
+			}
+		}
+	}
 
-  /**
-   * receive a packet from sender, produce a queue of packets that need to be
-   * forwarded. Does nothing if the router is shutdown.
-   * @param  LSP packet        received packet
-   * @return     a queue of forwarding packet
-   */
-  public Queue<LSP> receivePacket(LSP packet) {
-    if (!this.isAlive) {
-      return null;
-    }
-    this.neighbor.put(packet.sender, this.tickCounter);
-    packet.ttl = packet.ttl - 1;
-    // ttl reaches 0 or a greater sequence number has been seen.
-    if (packet.ttl == 0 || lowerSequence(packet.master, packet.sequenceNum)) {
-      return null;
-    }
+	
+	private boolean lowerSequence(String router, int sequenceNum) {
+		if (!this.routerStates.containsKey(router)) {
+			return false;
+		}
+		return sequenceNum <= this.routerStates.get(router);
+	}
 
-    // prepare to send the packet
-    compareNetworks(packet);
-    Queue<LSP> res = new LinkedList<LSP>();
-    this.visiter.put(packet.master, packet.sequenceNum);
-    for (String key : this.cost.keySet()) {
-      if (!key.equals(packet.sender)) {
-        LSP p = new LSP(packet.master, packet.sequenceNum, packet.ttl,
-                        clone(packet.networks), this.routerID, key);
-        p.target = key;
-        this.sequenceNum = this.sequenceNum + 1;
-        res.add(p);
-      }
-    }
-    return res;
-  }
+	// djikstra apsp algo
+	private void apsp() {
+		System.out.println("APSP ROUTER " + this.routerID);
+		System.out.println("----------------------------------------------");
+		Map<String, Double> nwc = new HashMap<String, Double>();
+		Map<String, String> nwr = new HashMap<String, String>();
+		PriorityQueue<Vertex> q = new PriorityQueue<Vertex>();
+		Set<String> visited = new HashSet<String>();
+		for (String r : routerStates.keySet()) {
+			if (r.equals(this.routerID)) {
+				q.add(new Vertex(r, 0.0, this.routerID));
+			} else {
+				q.add(new Vertex(r, Double.POSITIVE_INFINITY, this.routerID));
+			}
+		}
+		while (!q.isEmpty()) {
+			Vertex n = q.poll();
 
-  /**
-   * print the current routing table of this router
-   */
-  public void printRoutingTable() {
-    System.out.printf("Routing Table for Router %s is:\n", this.routerID);
-    for (String n : this.networks.keySet()) {
-      if (!n.equals(this.network) && this.networks.get(n) != Double.POSITIVE_INFINITY) {
-        System.out.printf("\t%s, %d, %s\n", n, this.networks.get(n).intValue(),
-                          this.networkRouter.get(n));
-      }
-    }
-  }
+			// priority queue gives a inf cost vertex, the rest cost is inf, break the loop
+			if (n.cost == Double.POSITIVE_INFINITY) {
+				break;
+			}
 
-  /**
-   * make a clone of a map
-   * @param  Map<String, Double>       the map we want to clone.
-   * @return             cloned map
-   */
-  private Map<String, Double> clone(Map<String, Double> m) {
-    Map<String, Double> c = new HashMap<String, Double>();
-    for (String key : m.keySet()) {
-      c.put(key, m.get(key));
-    }
-    return c;
-  }
+			// already visted
+			if (visited.contains(n.routerID)) {
+				continue;
+			}
 
-  /**
-   * get a cost of a link, the cost is infinity if the router hasn't sent any
-   * packet for past 2 tick.
-   * @param  String routerID      the router this link connect to.
-   * @return        the cost of the link.
-   */
-  private double linkCost(String routerID) {
+			visited.add(n.routerID);
+			// TODO: NANA
+			String tmpRt = n.routerID;
+			if (!nwc.containsKey(this.rtn.get(tmpRt)) || nwc.get(this.rtn.get(tmpRt)) > n.cost) {
+				nwc.put(this.rtn.get(tmpRt), n.cost);
+				nwr.put(this.rtn.get(tmpRt), n.ol);
+			}
+			Map<String, Double> tmpneighbor =l this.adjList.get(tmpRt);
+			for (String rt : tmpneighbor.keySet()) {
+				if (this.costRef.containsKey(rt)) {
+					q.add(new Vertex(rt, n.cost + tmpneighbor.get(rt), rt));
+				} else {
+					q.add(new Vertex(rt, n.cost + tmpneighbor.get(rt), n.routerID));
+				}
+			}
+		}
+		this.networks = nwc;
+		this.networkRouter = nwr;
+		System.out.println("----------------------------------------------");
+	}
 
-    // initially nothing in neighbor
-    if (!this.neighbor.containsKey(routerID)) {
-      this.neighbor.put(routerID, this.tickCounter);
-    }
-
-    // not recv packet from this, cost is inf
-    if (this.tickCounter - this.neighbor.get(routerID) > 1) {
-      return Double.POSITIVE_INFINITY;
-    }
-    return this.cost.get(routerID);
-  }
-
-  /**
-   * update the network graph after the tick
-   */
-  private void updateNetworks() {
-    for (String network : this.networks.keySet()) {
-      if (!network.equals(this.network) && linkCost(this.networkRouter.get(network)) == Double.POSITIVE_INFINITY) {
-        this.networks.put(network, Double.POSITIVE_INFINITY);
-      }
-    }
-  }
-
-  /**
-   * compare and update the network after receive a LSP
-   * @param LSP p the LSP router received
-   */
-  private void compareNetworks(LSP p) {
-    for (String network : p.networks.keySet()) {
-      if (network.equals(this.network)) {
-        continue;
-      }
-      System.out.println("host " + this.routerID + " sender " + p.sender);
-      double newCost = p.networks.get(network) + linkCost(p.sender);
-      p.networks.put(network, newCost);
-      if (!this.networks.containsKey(network) || newCost < this.networks.get(network)) {
-        this.networks.put(network, newCost);
-        this.networkRouter.put(network, p.sender);
-      }
-    }
-  }
-
-  /**
-   * check if the packet's origin router has already visited with a higher sequence
-   * number.
-   * @param  String router        LSP's originate router.
-   * @param  int    sequenceNum   LSP's sequence number.
-   * @return        boolean value of the comparison.
-   */
-  private boolean lowerSequence(String router, int sequenceNum) {
-    if (!this.visiter.containsKey(router)) {
-      return false;
-    }
-    return sequenceNum <= this.visiter.get(router);
-  }
+//	private Map<String, Double> clone(Map<String, Double> m) {
+//	    Map<String, Double> c = new HashMap<String, Double>();
+//	    for (String key : m.keySet()) {
+//	      c.put(key, m.get(key));
+//	    }
+//	    return c;
+//	}
 }
