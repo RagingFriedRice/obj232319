@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.lang.Double;
 
 public class linkState {
   public static final int initTTL = 10;
@@ -10,40 +11,25 @@ public class linkState {
     shell(rMap);
   }
 
-  // TODO: needs to double check this
+  // TODO: paste the right version here
   private static Map<String, Router> initRouter(Scanner s) {
-    Map<String, Router> rMap = new HashMap<String, Router>();
-    Queue<String> buffer = new LinkedList<String>();
-    while (s.hasNextLine()) {
-      buffer.add(s.nextLine());
-    }
-    String r = buffer.remove();
-
-    while (!buffer.isEmpty()) {
-      String[] temp = r.split(" ");
-      String rID = temp[0];
-      String network = temp[1];
-      Map<String, Double> cost = new HashMap<String, Double>();
-      Map<String, Double> networks = new HashMap<String, Double>();
-      Map<String, String> networkRouter = new HashMap<String, String>();
-
-      // network of itself
-      networks.put(network, 0.0);
-      networkRouter.put(network, rID);
-
-      String tempStr = buffer.remove();
-      while (tempStr.charAt(0) == ' ') {
-        temp = tempStr.split(" ");
-        String rout = temp[1];
-        double c = Double.parseDouble(temp[2]);
-        cost.put(rout, c);
-        tempStr = buffer.remove();
+    Map<String, Router> rM = new HashMap<String, Router>();
+    String rt = "";
+    while(s.hasNextLine()) {
+      String str = s.nextLine();
+      String[] l = str.split(" ");
+      if (str.charAt(0) != ' ') {
+        rt = l[0];
+        rM.put(rt, new Router(rt, l[1], new HashMap<String, Double>()));
+      } else {
+        if (l.length > 2) {
+          rM.get(rt).costRef.put(l[1], Double.parseDouble(l[2]));
+        } else {
+          rM.get(rt).costRef.put(l[1], 1.0);
+        }
       }
-      Router tempRouter = new Router(rID, network, cost, networks, networkRouter);
-      rMap.put(rID, tempRouter);
-      r = tempStr;
     }
-    return rMap;
+    return rM;
   }
 
   /**
@@ -82,20 +68,22 @@ public class linkState {
    * each router. this method make sure that lsp with higher ttl get sent first.
    * @param Map<String, Router> m   all the routers.
    */
-  private static void proto_process(Map<String, Router> m) {
-    Queue<LSP> fringe = new LinkedList<LSP>();
-    for (String key : m.keySet()) {
-      Queue<LSP> tmp = m.get(key).originatePacket();
-      while(!tmp.isEmpty()) {
-        fringe.add(tmp.remove());
-      }
-    }
-    while(!fringe.isEmpty()) {
-      LSP p = fringe.remove();
-      Queue<LSP> tmp = m.get(p.target).receivePacket(p);
-      while(tmp != null && !tmp.isEmpty()) {
-        fringe.add(tmp.remove());
-      }
-    }
-  }
+   private static void proto_process(Map<String, Router> m) {
+ 		Queue<LSP> fringe = new LinkedList<LSP>();
+ 		for (String key : m.keySet()) {
+ 			LSP tmp = m.get(key).originatePacket();
+ 			if (tmp != null) {
+ 				fringe.add(tmp);
+ 			}
+ 		}
+ 		while(!fringe.isEmpty()) {
+ 			LSP p = fringe.remove();
+ 			for (String r : m.get(p.sender).costRef.keySet()) {
+ 				LSP tmp = m.get(r).receivePacket(p);
+ 				if (tmp != null) {
+ 					fringe.add(tmp);
+ 				}
+ 			}
+ 		}
+ 	}
 }

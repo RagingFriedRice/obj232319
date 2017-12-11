@@ -101,7 +101,7 @@ public class Router {
 		}
 	}
 
-	
+
 	private boolean lowerSequence(String router, int sequenceNum) {
 		if (!this.routerStates.containsKey(router)) {
 			return false;
@@ -144,7 +144,7 @@ public class Router {
 				nwc.put(this.rtn.get(tmpRt), n.cost);
 				nwr.put(this.rtn.get(tmpRt), n.ol);
 			}
-			Map<String, Double> tmpneighbor =l this.adjList.get(tmpRt);
+			Map<String, Double> tmpneighbor = this.adjList.get(tmpRt);
 			for (String rt : tmpneighbor.keySet()) {
 				if (this.costRef.containsKey(rt)) {
 					q.add(new Vertex(rt, n.cost + tmpneighbor.get(rt), rt));

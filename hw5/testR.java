@@ -17,21 +17,21 @@ public class testR {
 
 		proto_process(rM);
 
-		for (String r: rM.keySet()) {
-			if (r.equals("1")) {
-				continue;
-			}
-			rM.get(r).printRoutingTable();
-		}
-
-		proto_process(rM);
-
-		for (String r: rM.keySet()) {
-			if (r.equals("1")) {
-				continue;
-			}
-			rM.get(r).printRoutingTable();
-		}
+	// 	for (String r: rM.keySet()) {
+	// 		if (r.equals("1")) {
+	// 			continue;
+	// 		}
+	// 		rM.get(r).printRoutingTable();
+	// 	}
+  //
+	// 	proto_process(rM);
+  //
+	// 	for (String r: rM.keySet()) {
+	// 		if (r.equals("1")) {
+	// 			continue;
+	// 		}
+	// 		rM.get(r).printRoutingTable();
+	// 	}
 	}
 
 	private static void proto_process(Map<String, Router> m) {
